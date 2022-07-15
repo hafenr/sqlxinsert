@@ -188,6 +188,71 @@ pub fn derive_from_struct_psql(input: TokenStream) -> TokenStream {
     })
 }
 
+#[proc_macro_derive(PgUpdate)]
+pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let fields = match &input.data {
+        Data::Struct(DataStruct {
+            fields: Fields::Named(fields),
+            ..
+        }) => &fields.named,
+        _ => panic!("expected a struct with named fields"),
+    };
+
+    // Create two iterators as we need to iterate through the fields twice
+    let field_name_iter = fields.iter().map(|field| &field.ident);
+    let field_name_iter_for_values = fields.iter().map(|field| &field.ident);
+    let struct_name = &input.ident;
+
+    TokenStream::from(quote! {
+        impl #struct_name {
+            pub fn update_query(&self, table: &str) -> String
+            {
+                let mut set_expressions = Vec::new();
+                let mut ix = 1;
+                #(
+                    match &self.#field_name_iter {
+                        Some(value) => {
+                            let field_name_str = stringify!(#field_name_iter);
+                            let expr = format!("{} = {}", field_name_str, format!("${}", ix));
+                            set_expressions.push(expr);
+                            ix += 1;
+                        },
+                        None => ()
+                    }
+                )*
+
+                let set_expression = set_expressions.join(", ");
+                let query = format!("UPDATE {} SET {} RETURNING *", table, set_expression);
+                query
+            }
+
+            pub async fn update<T>(&self, pool: &sqlx::PgPool, table: &str) -> sqlx::Result<T>
+            where
+                T: Send,
+                T: for<'c> sqlx::FromRow<'c, sqlx::postgres::PgRow>,
+                T: std::marker::Unpin
+            {
+                let sql = self.update_query(table);
+                let mut query = sqlx::query_as::<_,T>(&sql);
+                #(
+                    match &self.#field_name_iter_for_values {
+                        Some(value) => {
+                            query = query.bind(value);
+                        }
+                        None => ()
+                    }
+                )*
+                let res: T = query
+                    .fetch_one(pool)
+                    .await?;
+                Ok(res)
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
