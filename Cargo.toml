@@ -2,7 +2,7 @@
 name = "sqlxinsert"
 version = "0.6.0"
 authors = ["Filip Bucek <fbucek@invloop.cz>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 description = "Sqlx derive macro for simpler inserts"
 repository = "https://github.com/fbucek/sqlxinsert"
@@ -17,8 +17,8 @@ eyre = "0.6"
 quote = "1.0"
 syn = "1.0"
 async-trait = "0.1"
-sqlx = { version = "0.6", default-features = false, features = ["runtime-actix-rustls", "sqlite", "postgres"] }
+sqlx = { version = "0.6.0", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }
 
 [dev-dependencies]
 tokio = { version = "1.19", features= ["rt-multi-thread",  "macros"] }
-sqlx = { version = "0.6", default-features = false, features = ["runtime-actix-rustls", "macros", "sqlite", "postgres"] }
+sqlx = { version = "0.6.0", default-features = false, features = ["postgres", "macros", "runtime-tokio-rustls"] }

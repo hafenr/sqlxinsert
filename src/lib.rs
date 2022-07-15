@@ -73,7 +73,7 @@ pub fn derive_from_struct_sqlite(input: TokenStream) -> TokenStream {
         impl #struct_name {
             pub fn insert_query(&self, table: &str) -> String
             {
-                let sqlquery = format!("insert into {} ( {} ) values ( {} )", table, #columns, #values); //self.values );
+                let sqlquery = format!("insert into {} ( {} ) values ( {} ) returning *", table, #columns, #values); //self.values );
                 sqlquery
             }
 
@@ -166,7 +166,7 @@ pub fn derive_from_struct_psql(input: TokenStream) -> TokenStream {
                 sqlquery
             }
 
-            pub async fn insert<T>(&self, pool: &sqlx::PgPool, table: &str) -> eyre::Result<T>
+            pub async fn insert<T>(&self, pool: &sqlx::PgPool, table: &str) -> sqlx::Result<T>
             where
                 T: Send,
                 T: for<'c> sqlx::FromRow<'c, sqlx::postgres::PgRow>,
