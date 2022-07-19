@@ -1,9 +1,12 @@
 extern crate proc_macro;
-use self::proc_macro::TokenStream;
-
 use quote::quote;
+use syn::parse_macro_input;
+use syn::Data;
+use syn::DataStruct;
+use syn::DeriveInput;
+use syn::Fields;
 
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
+use self::proc_macro::TokenStream;
 
 /// 2 -> ( $1,$2 )
 fn dollar_values(max: usize) -> String {
@@ -166,24 +169,25 @@ pub fn derive_from_struct_psql(input: TokenStream) -> TokenStream {
                 sqlquery
             }
 
-            pub async fn insert<T>(&self, pool: &sqlx::PgPool, table: &str) -> sqlx::Result<T>
+            pub async fn insert<'c, T, E>(&self, executor: E, table: &str) -> sqlx::Result<T>
             where
                 T: Send,
-                T: for<'c> sqlx::FromRow<'c, sqlx::postgres::PgRow>,
-                T: std::marker::Unpin
+                T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>,
+                T: std::marker::Unpin,
+                E: sqlx::Executor<'c, Database = sqlx::Postgres>,
             {
                 let sql = self.insert_query(table);
-
                 // let mut pool = pool;
                 let res: T = sqlx::query_as::<_,T>(&sql)
                 #(
-                    .bind(&self.#field_name_values)//         let #field_name: #field_type = Default::default();
+                    .bind(&self.#field_name_values)
                 )*
-                    .fetch_one(pool)
+                    .fetch_one(executor)
                     .await?;
 
                 Ok(res)
             }
+
         }
     })
 }
@@ -228,11 +232,12 @@ pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
                 query
             }
 
-            pub async fn update<T>(&self, pool: &sqlx::PgPool, table: &str) -> sqlx::Result<T>
+            pub async fn update<'c, T, E>(&self, executor: E, table: &str) -> sqlx::Result<T>
             where
                 T: Send,
-                T: for<'c> sqlx::FromRow<'c, sqlx::postgres::PgRow>,
-                T: std::marker::Unpin
+                T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>,
+                T: std::marker::Unpin,
+                E: sqlx::Executor<'c, Database = sqlx::Postgres>,
             {
                 let sql = self.update_query(table);
                 let mut query = sqlx::query_as::<_,T>(&sql);
@@ -245,7 +250,7 @@ pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
                     }
                 )*
                 let res: T = query
-                    .fetch_one(pool)
+                    .fetch_one(executor)
                     .await?;
                 Ok(res)
             }
