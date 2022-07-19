@@ -211,7 +211,7 @@ pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl #struct_name {
-            pub fn update_query(&self, table: &str) -> String
+            pub fn update_query(&self, table: &str, id_column: &str) -> String
             {
                 let mut set_expressions = Vec::new();
                 let mut ix = 1;
@@ -228,18 +228,18 @@ pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
                 )*
 
                 let set_expression = set_expressions.join(", ");
-                let query = format!("UPDATE {} SET {} RETURNING *", table, set_expression);
+                let query = format!("UPDATE {} SET {} WHERE {} = {} RETURNING *", table, set_expression, id_column, format!("${}", ix));
                 query
             }
 
-            pub async fn update<'c, T, E>(&self, executor: E, table: &str) -> sqlx::Result<T>
+            pub async fn update<'q, 'e, T, E>(&self, executor: E, table: &str, id_column: &str, id: &sqlx::types::Uuid) -> sqlx::Result<T>
             where
                 T: Send,
                 T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>,
                 T: std::marker::Unpin,
-                E: sqlx::Executor<'c, Database = sqlx::Postgres>,
+                E: sqlx::Executor<'e, Database = sqlx::Postgres>,
             {
-                let sql = self.update_query(table);
+                let sql = self.update_query(table, id_column);
                 let mut query = sqlx::query_as::<_,T>(&sql);
                 #(
                     match &self.#field_name_iter_for_values {
@@ -249,6 +249,7 @@ pub fn derive_pg_update_from_struct_psql(input: TokenStream) -> TokenStream {
                         None => ()
                     }
                 )*
+                query = query.bind(id);
                 let res: T = query
                     .fetch_one(executor)
                     .await?;
